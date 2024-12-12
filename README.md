@@ -58,6 +58,7 @@ btrfs subvolume create /mnt/temp/@srv
 btrfs subvolume create /mnt/temp/@root
 umount /mnt/temp
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@ /mnt/target
+mkdir /mnt/target/{var,home,opt,srv,root}
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@var /mnt/target/var
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@home /mnt/target/home
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@opt /mnt/target/opt
