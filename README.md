@@ -14,11 +14,13 @@ Quero um setup com dual boot, com o sistema em uma partição Luks com BTRFS sem
 
 Layout desejado:
 
-| Tamanho | Montagem  | Filesystem           |
-| ------- | --------- | -------------------- |
-| 1 GiB   | /boot/efi | EFI System Partition |
-| 250 GiB | Windows   | NTFS                 |
-| 700 GiB | /         | LUKS (BTRFS)         |
+| Tamanho | Montagem  | Filesystem           | Path             |
+| ------- | --------- | -------------------- | ---------------- |
+| 1 GiB   | /boot     | EXT4                 | /dev/nvme0n1p1   |
+| 1 GiB   | /boot/efi | EFI System Partition | /dev/nvme0n1p2   |
+| 250 GiB | Windows   | NTFS                 | /dev/nvme0n1p3   |
+| 700 GiB | /         | LUKS (BTRFS)         | /dev/nvme0n1p4   |
+| *       | FREE      | UNFORMATTED          | /dev/nvme0n1p5-* |
 
 
 
@@ -50,10 +52,11 @@ apt install arch-install-scripts debootstrap vim
 cfdisk /dev/nvme0n1
 
 # Formatar as partições
-mkfs.vfat -F 32 -n EFI /dev/nvme0n1p1
-mkfs.ntfs --fast --label WINDOWS /dev/nvme0n1p2
-cryptsetup luksFormat --label=cryptlinux /dev/nvme0n1p3
-cryptsetup open /dev/nvme0n1p3 cryptlinux
+mkfs.ext4 -L boot /dev/nvme0n1p1
+mkfs.vfat -F 32 -n EFI /dev/nvme0n1p2
+mkfs.ntfs --fast --label WINDOWS /dev/nvme0n1p3
+cryptsetup luksFormat --label=cryptlinux /dev/nvme0n1p4
+cryptsetup open /dev/nvme0n1p4 cryptlinux
 mkfs.btrfs --label cryptlinux /dev/mapper/cryptlinux
 
 # Criar os subvolumes
@@ -67,6 +70,8 @@ btrfs subvolume create /mnt/temp/@opt
 btrfs subvolume create /mnt/temp/@srv
 btrfs subvolume create /mnt/temp/@root
 umount /mnt/temp
+
+# Montar os subvolumes
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@ /mnt/target
 mkdir /mnt/target/{var,home,opt,srv,root}
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@var /mnt/target/var
@@ -74,8 +79,11 @@ mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@opt /mnt/target/opt
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@srv /mnt/target/srv
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@root /mnt/target/root
+
+# Partições de boot
 mkdir -p /mnt/target/boot/efi
-mount -o defaults,nosuid,nodev,relatime,errors=remount-ro /dev/nvme0n1p1 /mnt/target/boot/efi
+mount -o defaults,nosuid,nodev,relatime,errors=remount-ro /dev/nvme0n1p1 /mnt/target/boot
+mount -o defaults,nosuid,nodev,relatime,errors=remount-ro /dev/nvme0n1p2 /mnt/target/boot/efi
 
 # Bootstrap do Ubuntu 24.04
 debootstrap noble /mnt/target http://br.archive.ubuntu.com/ubuntu
@@ -99,7 +107,7 @@ EOF
 genfstab /mnt/target > /mnt/target/etc/fstab
 
 # Configurar o crypttab com o volume LUKS
-echo "cryptlinux /dev/nvme0n1p3 none luks" > /etc/crypttab
+echo "cryptlinux /dev/nvme0n1p4 none luks" > /mnt/target/etc/crypttab
 
 # Fazer CHROOT para o ambiente Ubuntu
 arch-chroot /mnt/target
@@ -120,7 +128,7 @@ apt dist-upgrade -y
 apt install --no-install-recommends \
   linux-{,image-,headers-}generic-hwe-24.04 \
   linux-firmware initramfs-tools efibootmgr \
-  btrfs-progs curl wget dmidecode ethtool firewalld fwupd gawk git gnupg htop man \
+  cryptsetup btrfs-progs curl wget dmidecode ethtool firewalld fwupd gawk git gnupg htop man \
   needrestart openssh-server patch screen software-properties-common tmux zsh zstd \
   grub-efi-amd64 gnome flatpak gnome-software-plugin-flatpak gdm3 cryptsetup-initramfs \
   plymouth plymouth-theme-spinner
@@ -159,25 +167,35 @@ Nesses casos, reinicie no Live CD, conecte a Internet, abra um terminal e execut
 
 
 ```bash
+# Rodar como root
 sudo su -
 
+# Instalar os scripts
 apt update
 apt install arch-install-scripts debootstrap vim -y
 
+# Preparar os discos
 cd /mnt
 mkdir target
 
-cryptsetup open /dev/nvme0n1p3 cryptlinux
+# Abrir o volume criptografado
+cryptsetup open /dev/nvme0n1p4 cryptlinux
 
+# Montar os subvolumes BTRFS
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@ /mnt/target
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@var /mnt/target/var
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@home /mnt/target/home
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@opt /mnt/target/opt
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@srv /mnt/target/srv
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@root /mnt/target/root
-mount -o defaults,nosuid,nodev,relatime,errors=remount-ro /dev/nvme0n1p1 /mnt/target/boot/efi
 
+# Montar os discos de boot
+mount -o defaults,nosuid,nodev,relatime,errors=remount-ro /dev/nvme0n1p1 /mnt/target/boot
+mount -o defaults,nosuid,nodev,relatime,errors=remount-ro /dev/nvme0n1p2 /mnt/target/boot/efi
+
+# Entrar no sistema
 arch-chroot /mnt/target
+
 ```
 
 
