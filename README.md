@@ -81,8 +81,9 @@ mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:
 mount /dev/mapper/cryptlinux -o defaults,noatime,autodefrag,compress-force=zstd:1,space_cache=v2,discard=async,subvol=@root /mnt/target/root
 
 # Partições de boot
-mkdir -p /mnt/target/boot/efi
+mkdir -p /mnt/target/boot
 mount -o defaults,nosuid,nodev,relatime,errors=remount-ro /dev/nvme0n1p1 /mnt/target/boot
+mkdir -p /mnt/target/boot/efi
 mount -o defaults,nosuid,nodev,relatime,errors=remount-ro /dev/nvme0n1p2 /mnt/target/boot/efi
 
 # Bootstrap do Ubuntu 24.04
@@ -130,8 +131,9 @@ apt install --no-install-recommends \
   linux-firmware initramfs-tools efibootmgr \
   cryptsetup btrfs-progs curl wget dmidecode ethtool firewalld fwupd gawk git gnupg htop man \
   needrestart openssh-server patch screen software-properties-common tmux zsh zstd \
-  grub-efi-amd64 gnome flatpak gnome-software-plugin-flatpak gdm3 cryptsetup-initramfs \
-  plymouth plymouth-theme-spinner
+  grub-efi-amd64 flatpak gnome-software-plugin-flatpak gdm3 cryptsetup-initramfs \
+  plymouth plymouth-theme-spinner ubuntu-desktop-minimal gnome-session gnome-tweaks \
+  
 
 # Configurar bootloader
 mkdir -p /etc/default/grub.d
@@ -145,7 +147,7 @@ update-initramfs -u -k all
 # Usuários
 useradd -m wesley \
   -c "Wesley Rodrigues" \
-  -G sudo \
+  -G adm,tty,disk,lp,kmem,uucp,dialout,cdrom,floppy,sudo,audio,dip,video,plugdev,games,users,utmp \
   -s /bin/zsh
 
 echo "root:12345678" | chpasswd
